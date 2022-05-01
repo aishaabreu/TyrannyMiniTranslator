@@ -51,7 +51,7 @@ def set_immutable(text):
 def revert_immutable(text, immutable_keys):
     for key, value in immutable_keys.items():
         text = re.sub(f'\[\s*{key}\s*\]', value, text)
-    return text
+    return text.strip()
 
 
 def get_files(folder, extension):
@@ -155,7 +155,7 @@ def generate_locale(data, translate_data, source, target, name, verbose):
                         worksheet = workbook.active
                         xlsx_files[data['xlsx']] = worksheet
 
-                    entry.text = revert_immutable(
+                    entry.find(text_key).text = revert_immutable(
                         (worksheet[data['line']].value or ''),
                         data['immutable']
                     )
