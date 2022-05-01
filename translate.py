@@ -10,6 +10,11 @@ import xlsxwriter
 import openpyxl
 from xml.etree import ElementTree
 
+SOURCE_LOCALE = 'en'
+TARGET_LOCALE = 'pt'
+TARGET_NAME = 'portuguese'
+TARGET_VERBOSE = 'Português (Brasil)'
+
 REGEX_TAG = re.compile(r"\[['\w\s=:/]+\]")
 REGEX_SPECIAL_CARACTERES = re.compile('[\n\r"]+')
 XML_EXTENSION = '.stringtable'
@@ -25,11 +30,6 @@ DATA = (
 
 TEMP_FOLDER = 'temp'
 LANGUAGE_FILE = 'language.xml'
-SOURCE_LOCALE = 'en'
-TARGET_LOCALE = 'pt'
-TARGET_NAME = 'portuguese'
-TARGET_VERBOSE = 'Português (Brasil)'
-
 
 def set_immutable(text):
     if not text:
