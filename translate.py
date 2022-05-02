@@ -19,6 +19,7 @@ TARGET_NAME = 'portuguese'
 TARGET_VERBOSE = 'Português (Brasil)'
 
 REGEX_URL_TAG = re.compile(r"\[/*url['\w\s=:]*\]")
+REGEX_FORMATABLE = re.compile(r"{\d+}")
 REGEX_SPECIAL_CARACTERES = re.compile('[\n\r"]+')
 XML_EXTENSION = '.stringtable'
 MAX_XLSX_LINES = 35000
@@ -87,6 +88,7 @@ def set_immutable(text):
 
     immutable = set(
         REGEX_URL_TAG.findall(text) +
+        REGEX_FORMATABLE.findall(text) +
         REGEX_SPECIAL_CARACTERES.findall(text)
     )
 
@@ -112,7 +114,7 @@ def revert_immutable(text, immutable_keys, titles):
     if text[:2] == '" ':
         text = f'"{text[2:]}'
     for k, v in titles.items():
-        text = re.sub(f'\[\s*{k}\s*\]', v, text)
+        text = re.sub(f'\[\s*00\s*-\s*{k.split("-")[-1]}\s*\]', v, text)
     return text
 
 
