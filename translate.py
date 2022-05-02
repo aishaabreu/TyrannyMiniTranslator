@@ -10,12 +10,15 @@ import xlsxwriter
 import openpyxl
 from xml.etree import ElementTree
 
+# Current version of script is optimized to source from english language
 SOURCE_LOCALE = 'en'
+
+# Change to you target language
 TARGET_LOCALE = 'pt'
 TARGET_NAME = 'portuguese'
 TARGET_VERBOSE = 'Português (Brasil)'
 
-REGEX_TAG = re.compile(r"\[['\w\s=:/]+\]")
+REGEX_URL_TAG = re.compile(r"\[/*url['\w\s=:]*\]")
 REGEX_SPECIAL_CARACTERES = re.compile('[\n\r"]+')
 XML_EXTENSION = '.stringtable'
 MAX_XLSX_LINES = 35000
@@ -31,27 +34,86 @@ DATA = (
 TEMP_FOLDER = 'temp'
 LANGUAGE_FILE = 'language.xml'
 
+
+def title_is_valid(chunk, title):
+    if title[:2] == "I'":
+        return False
+    c, l = chunk.strip("'").strip('"').strip(), len(title)
+    if l <= 3:
+        return False
+    words = re.findall(r'[A-Z][a-z]+', title)
+    if c[:l] == title and len(c[l:]) and len(words) == 1:
+        return False
+    return True
+
+
+def get_titles_words(text):
+    titles = []
+    for chunk in re.split(r'[\[\],\.\n]', text):
+        title = None
+        lower = None
+        for word in chunk.strip().split(' '):
+            match = re.match(r"[A-Z][a-z]*'?[a-z]", word.strip("'").strip('"'))
+            match_l = re.match(r"^[a-z]{1,3}(?!\w)", word.strip("'").strip('"'))
+            if match:
+                title = (
+                    f'{title} {lower} {match.group()}'
+                    if (title and lower) else (
+                        f'{title} {match.group()}'
+                        if title else match.group()
+                    )
+                )
+                lower = None
+            elif match_l:
+                if lower:
+                    title = None
+                    lower = None
+                else:
+                    lower = match_l.group()
+            elif title:
+                if title_is_valid(chunk, title):
+                    titles.append(title)
+                title = None
+                lower = None
+        if title:
+            if title_is_valid(chunk, title):
+                titles.append(title)
+    return titles
+
+
 def set_immutable(text):
     if not text:
-        return (None, None)
+        return (None, None, None)
 
-    immutable = list(set(
-        REGEX_TAG.findall(text) +
+    immutable = set(
+        REGEX_URL_TAG.findall(text) +
         REGEX_SPECIAL_CARACTERES.findall(text)
-    ))
+    )
 
     immutable_keys = {}
     for index, value in enumerate(immutable):
         key = str(index).rjust(4, '0')
         immutable_keys[key] = value
         text = text.replace(value, f"[{key}]")
-    return (text, immutable_keys)
+
+    titles = {}
+    for index, title in enumerate(set(get_titles_words(text))):
+        key = f"00-{str(index).rjust(2, '0')}"
+        titles[key] = title
+        text = text.replace(title, f"[{key}]")
+
+    return (text, immutable_keys, titles)
 
 
-def revert_immutable(text, immutable_keys):
+def revert_immutable(text, immutable_keys, titles):
     for key, value in immutable_keys.items():
         text = re.sub(f'\[\s*{key}\s*\]', value, text)
-    return text.strip()
+    text = text.strip()
+    if text[:2] == '" ':
+        text = f'"{text[2:]}'
+    for k, v in titles.items():
+        text = re.sub(f'\[\s*{k}\s*\]', v, text)
+    return text
 
 
 def get_files(folder, extension):
@@ -68,11 +130,17 @@ def get_files(folder, extension):
 def generate_xlsx(data, translate_data, locale):
     part_num = 1
     current_line = 1
+    current_title = 1
 
     xml_base = f'{data[0]}_translate'
     path = os.path.join(*data, locale)
     translate_data[path] = {}
 
+    title_wb = xlsxwriter.Workbook(
+        os.path.join(TEMP_FOLDER, f'{xml_base}.titles.xlsx')
+    )
+    title_ws = title_wb.add_worksheet()
+    title_writes = {}
     workbook = xlsxwriter.Workbook(
         os.path.join(TEMP_FOLDER, f'{xml_base}.part{part_num}.xlsx')
     )
@@ -86,12 +154,24 @@ def generate_xlsx(data, translate_data, locale):
             id = entry.find('ID').text
             for text_key in ['DefaultText', 'FemaleText']:
                 line_key = f'A{current_line}'
-                text, immutable = set_immutable(entry.find(text_key).text)
+                text, immutable, titles = set_immutable(
+                    entry.find(text_key).text
+                )
 
                 if text is None:
                     continue
 
                 worksheet.write(line_key, text)
+
+                titles_lines = {}
+                for key, title in titles.items():
+                    t_l_key = title_writes.get(title, None)
+                    if not t_l_key:
+                        t_l_key = f'A{current_title}'
+                        title_writes[title] = t_l_key
+                        title_ws.write(t_l_key, title)
+                        current_title += 1
+                    titles_lines[key] = t_l_key
 
                 translate_data[path][file_key][id] = (
                     translate_data[path][file_key].get(id, {})
@@ -99,8 +179,10 @@ def generate_xlsx(data, translate_data, locale):
                 translate_data[path][file_key][id].update({
                     text_key: {
                         'xlsx': f'{xml_base}.part{part_num}.xlsx',
+                        'xlsx_titles': f'{xml_base}.titles.xlsx',
                         'line': line_key,
-                        'immutable': immutable
+                        'immutable': immutable,
+                        'titles': titles_lines,
                     }
                 })
 
@@ -117,6 +199,8 @@ def generate_xlsx(data, translate_data, locale):
                     worksheet = workbook.add_worksheet()
     workbook.close()
     print(f'Created: {workbook.filename}')
+    title_wb.close()
+    print(f'Created: {title_wb.filename}')
 
 
 def generate_locale(data, translate_data, source, target, name, verbose):
@@ -155,10 +239,24 @@ def generate_locale(data, translate_data, source, target, name, verbose):
                         worksheet = workbook.active
                         xlsx_files[data['xlsx']] = worksheet
 
+                    title_ws = xlsx_files.get(data['xlsx_titles'], None)
+                    if not title_ws:
+                        title_wb = openpyxl.load_workbook(
+                            os.path.join(TEMP_FOLDER, data['xlsx_titles'])
+                        )
+                        title_ws = title_wb.active
+                        xlsx_files[data['xlsx_titles']] = title_ws
+
+                    titles = {}
+                    for key, line in data['titles'].items():
+                        titles[key] = (title_ws[line].value or '').strip()
+
                     entry.find(text_key).text = revert_immutable(
                         (worksheet[data['line']].value or ''),
-                        data['immutable']
+                        data['immutable'],
+                        titles,
                     )
+
             file_output = os.path.join(
                 path.strip(source).strip(os.path.sep), target, file
             )

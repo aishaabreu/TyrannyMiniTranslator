@@ -18,9 +18,8 @@ Copy this folders to script path:
 <game_location>\Tyranny\Data\data_vx3
 ```
 
-Update script lines 13 to 16 with you source and targe language:
+Update script lines 17 to 19 with you source and targe language:
 ```
-SOURCE_LOCALE = 'en'
 TARGET_LOCALE = 'pt'
 TARGET_NAME = 'portuguese'
 TARGET_VERBOSE = 'Português (Brasil)'
