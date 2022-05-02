@@ -18,9 +18,11 @@ TARGET_LOCALE = 'pt'
 TARGET_NAME = 'portuguese'
 TARGET_VERBOSE = 'Português (Brasil)'
 
+REGEX_PLAYER = re.compile(r"\[\s*Player\s+Name\s*\]")
 REGEX_URL_TAG = re.compile(r"\[/*url['\w\s=:]*\]")
 REGEX_FORMATABLE = re.compile(r"{\d+}")
 REGEX_SPECIAL_CARACTERES = re.compile('[\n\r"]+')
+
 XML_EXTENSION = '.stringtable'
 MAX_XLSX_LINES = 35000
 JSON_FILE = 'translate_data.json'
@@ -87,6 +89,7 @@ def set_immutable(text):
         return (None, None, None)
 
     immutable = set(
+        REGEX_PLAYER.findall(text) +
         REGEX_URL_TAG.findall(text) +
         REGEX_FORMATABLE.findall(text) +
         REGEX_SPECIAL_CARACTERES.findall(text)
