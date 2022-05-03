@@ -16,7 +16,7 @@ SOURCE_LOCALE = 'en'
 # Change to you target language
 TARGET_LOCALE = 'pt'
 TARGET_NAME = 'portuguese'
-TARGET_VERBOSE = 'Português (Brasil)'
+TARGET_VERBOSE = 'Português'
 
 REGEX_PLAYER = re.compile(r"\[\s*Player\s+Name\s*\]")
 REGEX_URL_TAG = re.compile(r"\[/*url['\w\s=:]*\]")
@@ -56,7 +56,10 @@ def get_titles_words(text):
         title = None
         lower = None
         for word in chunk.strip().split(' '):
-            match = re.match(r"[A-Z][a-z]*'?[a-z]", word.strip("'").strip('"'))
+            match = (
+                re.match(r"[A-Z][a-z]*'?[a-z]", word.strip("'").strip('"')) or
+                re.match(r"[A-Z][a-z]*", word.strip("'").strip('"'))
+            )
             match_l = re.match(r"^[a-z]{1,3}(?!\w)", word.strip("'").strip('"'))
             if match:
                 title = (
@@ -97,27 +100,28 @@ def set_immutable(text):
 
     immutable_keys = {}
     for index, value in enumerate(immutable):
-        key = str(index).rjust(4, '0')
+        key = f"7700{str(index).rjust(2, '0')}"
         immutable_keys[key] = value
-        text = text.replace(value, f"[{key}]")
+        text = text.replace(value, f'#{key}#')
 
     titles = {}
-    for index, title in enumerate(set(get_titles_words(text))):
-        key = f"00-{str(index).rjust(2, '0')}"
+    titles_list = sorted(set(get_titles_words(text)), key=len, reverse=True)
+    for index, title in enumerate(titles_list):
+        key = f"9900{str(index).rjust(2, '0')}"
         titles[key] = title
-        text = text.replace(title, f"[{key}]")
+        text = text.replace(title, f'#{key}#')
 
     return (text, immutable_keys, titles)
 
 
 def revert_immutable(text, immutable_keys, titles):
     for key, value in immutable_keys.items():
-        text = re.sub(f'\[\s*{key}\s*\]', value, text)
+        text = re.sub(f'#\s*{key}\s*#', value, text)
     text = text.strip()
     if text[:2] == '" ':
         text = f'"{text[2:]}'
     for k, v in titles.items():
-        text = re.sub(f'\[\s*00\s*-\s*{k.split("-")[-1]}\s*\]', v, text)
+        text = re.sub(f'#\s*{k}\s*#', v, text)
     return text
 
 
